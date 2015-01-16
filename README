@@ -1,0 +1,8 @@
+# search_4_dupli_and_single
+To search for duplicates and singletons based on BLAST results
+
+1. To use this script, Biopython needs to be installed in advance.
+
+2. Please type python search_4_dupli_and_single.py to see the usage.
+
+3. If you have any question/suggestion, please write e-mails to sishuowang@hotmail.ca. Your help is highly appreciated!
