@@ -352,6 +352,8 @@ def show_help():
     --resort              resort gene pairs in the given lists (--pair_list_excluded)
     --is_complement       select duplicates first and all others will be defined as singletons
     --no_corename         no corename conversion
+    --find_chimera        find chimeric genes
+                          Default: OFF
     -h|--h|--help         show usage
 
     Note:
