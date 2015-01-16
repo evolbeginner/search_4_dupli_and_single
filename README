@@ -5,4 +5,7 @@ To search for duplicates and singletons based on BLAST results
 
 2. Please type python search_4_dupli_and_single.py to see the usage.
 
-3. If you have any question/suggestion, please write e-mails to sishuowang@hotmail.ca. Your help is highly appreciated!
+3. An simple example is as follows.
+	python search_4_dupli_and_single.py --seq_file=1.fas --blast_file=1.blast8 --outdir=1_out --find_chimera --no_corename
+
+4. If you have any question/suggestion, please write e-mails to sishuowang@hotmail.ca. Your help is highly appreciated!
