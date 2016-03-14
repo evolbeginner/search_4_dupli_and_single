@@ -4,10 +4,11 @@ import sys
 sys.path.append("./")
 from get_corename import get_corename
 
+
 ##########################################################################
 def set_find_chimera_args():
     find_chimera_args={}
-    find_chimera_args['num_of_units']=50
+    find_chimera_args['num_of_units']=30
     find_chimera_args['coverage'] = {'min':0.2,'max':0.7}
     find_chimera_args['aligned_length'] = {'min':150}
     return find_chimera_args
@@ -49,7 +50,7 @@ def fill_in_chimera_info_gene_dict(chimera_info_gene_dict,evalue,subject,i,is_no
     return(chimera_info_gene_dict)
 
 
-def parse_chimera_info(chimera_info,outfile):
+def parse_chimera_info(chimera_info, aln_info, outfile):
     if not chimera_info:
         return # if no chimera_info is generated, return
     fh=open(outfile,'w')
@@ -68,7 +69,9 @@ def parse_chimera_info(chimera_info,outfile):
                 effective_hits[hit]=[]
             effective_hits[hit].append(posi)
 
-        num_of_effective_hits = 0
+        num_of_true_hits = 0
+        true_hits = {}
+
         for posi in effective_hits[hit]:
             values = chimera_info[gene]['hit'].values()
             best_hits = filter (lambda x: values.count(x)>=10, values)
@@ -83,13 +86,19 @@ def parse_chimera_info(chimera_info,outfile):
                 OtherHitsIn_array = filter(lambda hit: hit in chimera_info[gene]['evalue'][posi], other_hits)
                 if not OtherHitsIn_array:
                     counter_4_an_effective_hit += 1
-            if (counter_4_an_effective_hit >= 10) or (counter_4_an_effective_hit * chimera_info[gene]['length_per_unit_floated'] >= 150):
-                num_of_effective_hits += 1
+            if (counter_4_an_effective_hit >= 10) or (counter_4_an_effective_hit * chimera_info[gene]['length_per_unit_floated'] >= 300):
+                num_of_true_hits += 1
+                true_hits[hit] = ""
     
-        if num_of_effective_hits >= 2:
+        if num_of_true_hits >= 2:
             fh.write(gene+'\n')
-            fh.write('\t'.join(effective_hits)+'\n')
-            print chimera_info[gene]['hit']
+            positions = []
+            for hit in true_hits.keys():
+                positions.append("-".join([str(aln_info[gene][hit]["start"]), str(aln_info[gene][hit]["end"])]))
+            zipped = zip(true_hits, positions)
+            fh.write('\t'.join(map(lambda x: "\t".join(x), zipped))+'\n')
+            #fh.write('\t'.join(effective_hits)+'\n')
+            #print chimera_info[gene]['hit']
             #print chimera_info[gene]['evalue']
     fh.close()
 

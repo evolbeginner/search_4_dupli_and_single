@@ -143,6 +143,7 @@ def read_seq_file(seq_file, seq_file_format='fasta'):
 
 
 def read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, coverage_query_swi, best_evalue_items, find_chimera_args={}):
+    aln_info = {}
     highest_bit_score={}
     blast_file_handle=open(blast_file,'r')
     chimera_info={}
@@ -153,12 +154,13 @@ def read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity
         line2 = line.split('\t')
         [query,subject,identity,aligned_length,query_start,query_end,subject_start,subject_end,evalue,bit_score] = operator.itemgetter(0,1,2,3,6,7,8,9,10,11)(line2)
         identity=float(identity)
-        evalue=float(evalue)
-        query_start,query_end=int(query_start),int(query_end)
-        subject_start,subject_end=int(subject_start),int(subject_end)
-        aligned_length=float(aligned_length) # must be float since in will be involved in ChuFa
-        bit_score=float(bit_score)
-        query_corename = get_corename(query,is_no_corename); subject_corename = get_corename(subject,is_no_corename)
+        evalue = float(evalue)
+        query_start,query_end = int(query_start),int(query_end)
+        subject_start,subject_end = int(subject_start),int(subject_end)
+        aligned_length = float(aligned_length) # must be float since in will be involved in ChuFa
+        bit_score = float(bit_score)
+        query_corename = get_corename(query,is_no_corename)
+        subject_corename = get_corename(subject,is_no_corename)
         if (query_corename != subject_corename):
             if (evalue <= singleton_evalue):
                 non_singletons[query_corename]=1
@@ -203,14 +205,21 @@ def read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity
                 q_s = {'subject':subject,'query':query}
                 for i in best_evalue_items:
                     if not q_s[i] in highest_bit_score:
-                        highest_bit_score[q_s[i]]=bit_score
+                        highest_bit_score[q_s[i]] = bit_score
                     else:
                         if bit_score <= highest_bit_score[q_s[i]]:
-                            is_continue=1
-                if is_continue == 1:
-                    continue
+                            is_continue = 1
+                    if is_continue == 1:
+                        continue
 
             duplicates[query_corename] = 1
+            if not query_corename in aln_info:
+                aln_info[query_corename] = {}
+            if not subject_corename in aln_info[query_corename]:
+                aln_info[query_corename][subject_corename] = {}
+            aln_info[query_corename][subject_corename]["start"] = query_start
+            aln_info[query_corename][subject_corename]["end"] = query_end
+
             pair = [query_corename, subject_corename]
             for i in [0,1]:
                 gene1 = pair[i]
@@ -218,22 +227,32 @@ def read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity
                 if not gene1 in pair_with:
                     pair_with[gene1]={}
                 pair_with[gene1][gene2] = evalue
-            if best_evalue_items:
-                upstreamPointOnS4Q[query_corename]={}
-                upstreamPointOnS4Q[query_corename]['start']=query_start
-                upstreamPointOnS4Q[query_corename]['hit_start']=subject_start
-                upstreamPointOnS4Q[query_corename]['paralog']=subject_corename
-                if subject_start<subject_end:
-                    upstreamPointOnS4Q[query_corename]['direction']='+'
+            for i in best_evalue_items:
+                if i == "query":
+                    key = query_corename
+                    start = query_start
+                    hit_start = subject_start
+                    paralog = subject_corename
+                elif i == "subject":
+                    key = subject_corename
+                    start = subject_start
+                    hit_start = query_start
+                    paralog = query_corename
+                upstreamPointOnS4Q[key]={}
+                upstreamPointOnS4Q[key]['start'] = start
+                upstreamPointOnS4Q[key]['hit_start'] = start
+                upstreamPointOnS4Q[key]['paralog'] = paralog
+                if subject_start < subject_end:
+                    upstreamPointOnS4Q[key]['direction'] = '+'
                 else:
-                    upstreamPointOnS4Q[query_corename]['direction']='-'
-    return(chimera_info)
+                    upstreamPointOnS4Q[key]['direction'] = '-'
+    return(chimera_info, aln_info)
 
 
 def select_singletons():
     for i in seq_objs.keys():
         m=re.search(r'^(\S+)',i)
-        if m:
+        if m and m.group(1):
             corename=get_corename(m.group(1),is_no_corename)
             if is_complement:
                 if (not corename in duplicates):
@@ -369,11 +388,11 @@ def show_help():
 
 read_seq_file(seq_file, seq_file_format)
 
-chimera_info = read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, coverage_query_swi, best_evalue_items, find_chimera_args)
+chimera_info, aln_info = read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, coverage_query_swi, best_evalue_items, find_chimera_args)
 
 select_singletons()
 
-find_chimera.parse_chimera_info(chimera_info,os.path.join(outdir,'chimera_output'))
+find_chimera.parse_chimera_info(chimera_info, aln_info, os.path.join(outdir,'chimera_output'))
 
 if is_duplicate_pairs:
     if pair_list_excluded:
