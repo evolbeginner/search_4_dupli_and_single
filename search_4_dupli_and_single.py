@@ -1,9 +1,11 @@
 #! /usr/local/bin/python
 
+
 # To identify duplicates, singletons and/or duplciated gene pairs based on reciprocal BLAST hits.
 # Author: Sishuo Wang from the department of Botany, the University of British Columbia
 # Email: sishuowang@hotmail.ca
 # Note: some packages need to be installed in advance.
+
 
 #######################################################################
 import sys
@@ -11,6 +13,7 @@ import getopt
 import re
 import os
 from Bio import SeqIO
+from itertools import combinations
 import operator
 import time
 # import selfbasics
@@ -34,6 +37,8 @@ resort_swi=''
 upstreamPointOnS4Q={}
 find_chimera_args={}
 chimera_info={}
+blast_regexp = None
+
 
 #######################################################################
 def read_param():
@@ -45,6 +50,7 @@ def read_param():
     min_bit_score=0
     min_coverage=0
     coverage_query_swi=0
+    seq_files = []
     seq_file_format='fasta'
     is_duplicate_pairs=False
     best_evalue_items=[]
@@ -55,14 +61,15 @@ def read_param():
     is_find_chimera=False
     find_chimera_args={}
     alter_min_AlignedLength=200
+    blast_regexp = None
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "h", ["help","seq_file=","seq_file_format=","blast_file=","outdir=","force","duplicate_evalue=","singleton_evalue=","min_identity=","min_bit_score=","min_coverage=","alter_min_AlignedLength=","coverage_query", "duplicate_pairs", "pair_list_excluded=", "best_evalue_item=", "no_TD", "resort", "complement", "no_corename", "find_chimera"])
+        opts, args = getopt.getopt(sys.argv[1:], "h", ["help","seq_file=","seq_file_format=","blast_file=","outdir=","force","duplicate_evalue=","singleton_evalue=","min_identity=","min_bit_score=","min_coverage=","alter_min_AlignedLength=","coverage_query", "duplicate_pairs", "pair_list_excluded=", "best_evalue_item=", "no_TD", "resort", "complement", "no_corename", "find_chimera", "blast_regexp="])
     except getopt.GetoptError:
         print "Illegal params!"
         show_help()
     for op, value in opts:
         if op == '--seq_file':
-            seq_file=os.path.expanduser(value)
+            seq_files.append(os.path.expanduser(value))
         elif op == '--seq_file_format':
             seq_file_format=value
         elif op == '--blast_file':
@@ -102,6 +109,8 @@ def read_param():
             is_no_corename = True
         elif op == "--find_chimera":
             is_find_chimera = True
+        elif op == "--blast_regexp":
+            blast_regexp = value
         elif re.search('^--?h(elp)?$',op):
             show_help()
 #    ================================    #
@@ -128,7 +137,7 @@ def read_param():
         out_param.write(i+'\n')
     out_param.close()
 #    ================================    #
-    return (blast_file, seq_file, seq_file_format, outdir, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, is_duplicate_pairs, pair_list_excluded, coverage_query_swi, best_evalue_items, no_TD_swi, resort_swi, is_complement, is_no_corename, find_chimera_args)
+    return (blast_file, seq_files, seq_file_format, outdir, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, is_duplicate_pairs, pair_list_excluded, coverage_query_swi, best_evalue_items, no_TD_swi, resort_swi, is_complement, is_no_corename, find_chimera_args, blast_regexp)
 
 
 def read_seq_file(seq_file, seq_file_format='fasta'):
@@ -142,7 +151,7 @@ def read_seq_file(seq_file, seq_file_format='fasta'):
     handle.close()
 
 
-def read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, coverage_query_swi, best_evalue_items, find_chimera_args={}):
+def read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, coverage_query_swi, best_evalue_items, blast_regexp, find_chimera_args={}):
     aln_info = {}
     highest_bit_score={}
     blast_file_handle=open(blast_file,'r')
@@ -153,6 +162,9 @@ def read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity
         line = line.rstrip('\n\r')
         line2 = line.split('\t')
         [query,subject,identity,aligned_length,query_start,query_end,subject_start,subject_end,evalue,bit_score] = operator.itemgetter(0,1,2,3,6,7,8,9,10,11)(line2)
+        if blast_regexp:
+            query = query.replace(blast_regexp, "")
+            subject = subject.replace(blast_regexp, "")
         identity=float(identity)
         evalue = float(evalue)
         query_start,query_end = int(query_start),int(query_end)
@@ -269,11 +281,14 @@ def get_pairs_excluded(pair_list_arr, seperator, resort_swi):
         for line in ff:
             line = line.rstrip('\r\n')
             line_arr = line.split(seperator)
-            line_arr = line_arr[0:2] # =========================
-            if resort_swi:
-                pair = "|".join(sorted(line_arr))
-            else:
-                pair = "|".join(line_arr)
+            #line_arr = line_arr[0:2] # =========================
+            gene_arrs_in_tuple = list(combinations(line_arr, 2))
+            for gene_arr_in_tuple in gene_arrs_in_tuple:
+                gene_arr = list(gene_arr_in_tuple)
+                if resort_swi:
+                    pair = "|".join(sorted(gene_arr))
+                else:
+                    pair = "|".join(gene_arr)
             pairs_excluded[pair] = 1
     return (pairs_excluded)
 
@@ -373,6 +388,8 @@ def show_help():
     --no_corename         no corename conversion
     --find_chimera        find chimeric genes
                           Default: OFF
+    --blast_regexp        replacement of blast subject and query
+                          Defaul: None
     -h|--h|--help         show usage
 
     Note:
@@ -381,14 +398,16 @@ def show_help():
 '''
     sys.exit(0)
 
+
 #######################################################################
-(blast_file, seq_file, seq_file_format, outdir, duplicate_evalue, singleton_evalue,
+(blast_file, seq_files, seq_file_format, outdir, duplicate_evalue, singleton_evalue,
  min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, is_duplicate_pairs, pair_list_excluded, coverage_query_swi,
- best_evalue_items, no_TD_swi, resort_swi, is_complement, is_no_corename, find_chimera_args) = read_param()
+ best_evalue_items, no_TD_swi, resort_swi, is_complement, is_no_corename, find_chimera_args, blast_regexp) = read_param()
 
-read_seq_file(seq_file, seq_file_format)
+for seq_file in seq_files:
+    read_seq_file(seq_file, seq_file_format)
 
-chimera_info, aln_info = read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, coverage_query_swi, best_evalue_items, find_chimera_args)
+chimera_info, aln_info = read_blast_file(blast_file, duplicate_evalue, singleton_evalue, min_identity, min_bit_score, min_coverage, alter_min_AlignedLength, coverage_query_swi, best_evalue_items, blast_regexp, find_chimera_args)
 
 select_singletons()
 
